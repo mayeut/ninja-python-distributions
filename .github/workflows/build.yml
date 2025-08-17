@@ -42,12 +42,36 @@ jobs:
         include:
           - os: ubuntu-latest
             arch: "x86_64"
+            docker_arch: "amd64"
+            build: "manylinux_"
+          - os: ubuntu-latest
+            arch: "x86_64"
+            docker_arch: "amd64"
+            build: "musllinux_"
           - os: ubuntu-latest
             arch: "i686"
+            docker_arch: "386"
+            build: "manylinux_"
+          - os: ubuntu-latest
+            arch: "i686"
+            docker_arch: "386"
+            build: "musllinux_"
           - os: ubuntu-24.04-arm
             arch: "aarch64"
+            docker_arch: "arm64"
+            build: "manylinux_"
+          - os: ubuntu-24.04-arm
+            arch: "aarch64"
+            docker_arch: "arm64"
+            build: "musllinux_"
           - os: ubuntu-24.04-arm
             arch: "armv7l"
+            docker_arch: "arm/v7"
+            build: "manylinux_"
+          - os: ubuntu-24.04-arm
+            arch: "armv7l"
+            docker_arch: "arm/v7"
+            build: "musllinux_"
           - os: ubuntu-latest
             arch: "ppc64le"
             build: "manylinux_"
@@ -85,6 +109,22 @@ jobs:
         uses: docker/setup-qemu-action@v3.6.0
         if: runner.os == 'Linux' && runner.arch == 'X64'
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3.11.1
+        if: runner.os == 'Linux'
+
+      - name: Build ninja_${{ matrix.build }}${{ matrix.arch }} image
+        uses: docker/build-push-action@v6.18.0
+        if: runner.os == 'Linux'
+        with:
+          context: ./docker-images
+          load: true
+          push: false
+          build-args: |
+            BASE_IMAGE=${{ (matrix.build == 'musllinux_') && 'quay.io/pypa/musllinux_1_2:2025.08.15-1' || ( (matrix.arch == 'riscv64') && 'ghcr.io/mayeut/manylinux_2_31:2025.08.16-1' || ((matrix.arch == 'armv7l') && 'quay.io/pypa/manylinux_2_31:2025.08.15-1' || 'quay.io/pypa/manylinux2014:2025.08.15-1') ) }}
+          tags: ninja_${{ matrix.build }}${{ matrix.arch }}:latest
+          platforms: linux/${{ matrix.docker_arch || matrix.arch }}
+
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: false
@@ -101,9 +141,9 @@ jobs:
           path: ./wheelhouse/*.whl
 
       - name: Test wheel on host Linux
-        if: runner.os == 'Linux' && matrix.arch == 'x86_64'
+        if: runner.os == 'Linux' && matrix.build == 'manylinux_' && (matrix.arch == 'x86_64' || matrix.arch == 'aarch64')
         run: |
-          pip install wheelhouse/*manylinux*x86_64*.whl
+          pip install wheelhouse/*manylinux*64.whl
           ninja --version
           python -m ninja --version
           python --version
